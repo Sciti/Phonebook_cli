@@ -1,25 +1,30 @@
 ﻿import os
 import csv
 
-from enum import Enum, auto
+from enum import Enum
+
+
 
 class States(Enum):
-    MAIN_MENU = auto()
-    ADD_RECORD = auto()
-    DELETE_RECORD = auto()
-    CHANGE_RECORD = auto()
-    SEARCH_RECORD = auto()
+    MAIN_MENU = 'main_menu'
+    ADD_RECORD = 'add_record'
+    DELETE_RECORD = 'delete_record'
+    CHANGE_RECORD = 'change_record'
+    SEARCH_RECORD = 'search_records'
 
 
 class Phonebook:
-    def __init__(self, phonebook_filename: str):
-        self._clear()
+    def __init__(self, filename: str):
 
-        self.phonebook_filename = phonebook_filename
-        self._check_file()
+        # clears console for better visuals
+        self._clear()
 
         self.current_state = States.MAIN_MENU
 
+        self.columns = ['first_name', 'last_name', 'surname',
+                       'company', 'work_number', 'personal_number']
+        
+        # made to simplify main cycle in run method
         self.main_menu = {
             '1': self.add_record,
             '2': self.delete_record,
@@ -29,28 +34,18 @@ class Phonebook:
         }
         
 
-    def _check_file(self):
-        # get phonebook source file extension and check format
-        self.extension = self.phonebook_filename.split('.')[-1]
-        if not self.extension == 'csv':
-            print('Неизвестный формат файла справочника, попробуйте другой')
-            return
-
-        # check if file exists, create if not
-        if not os.path.exists(self.phonebook_filename):
-            # determine columns to cleanup code a bit
-            columns = ['first_name', 'last_name', 'surname',
-                       'company', 'work_number', 'personal_number']
-            with open(self.phonebook_filename, 'w') as f:
-                f.write(';'.join(columns))
-
-
     def _clear(self):
+        """
+        Clears console
+        """
         os.system('clear' if os.name == 'posix' else 'cls')
 
 
     def clear_data(self):
-        os.remove(self.phonebook_filename)
+        """
+        Clears phonebook data by recreating file
+        """
+        os.remove(self.filename)
         self._check_file()
 
 
@@ -81,7 +76,6 @@ class Phonebook:
 
 
     def run(self):
-        self._check_file()
 
         main_menu = [
             '1. Добавить запись',
@@ -93,20 +87,26 @@ class Phonebook:
         ]
 
         chosen = None
-        while chosen != 'q':
+        while True:
             print('\n'.join(main_menu))
 
             chosen = input('>>> ')
             
+            # avoid printing unnecessary information and quit
             if chosen == 'q':
                 break
             
+            # choises must be digits, except for quit
             if not chosen.isdigit():
                 self._clear()
                 print('Неккоректный ввод, выберите пункт меню из предложенных: ')
                 continue
             
-            self.main_menu[chosen]()
+            try:
+                self.main_menu[chosen]()
+            except KeyError:
+                self._clear()
+                print('Неккоректный ввод, выберите пункт меню из предложенных: ')
 
         print('До свидания!')
         return
