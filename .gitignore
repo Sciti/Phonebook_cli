@@ -1,2 +1,9 @@
-﻿task
-phonebook.csv
+﻿# ide and cache
+__pycache__/
+*.pyc
+.vscode/
+
+# project files
+task
+*.csv
+!phonebook_example.csv
