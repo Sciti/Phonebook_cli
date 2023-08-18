@@ -1,58 +1,87 @@
 ﻿import sys
 import os
+
 from phonebook import Phonebook
 
 
+def process_file(data_folder: str = 'data', filename: str = 'phonebook_data.csv') -> str:
+    """
+    Check for file extension, directory and existence 
+    or return default filename
+    """
+    file_path = os.path.join(data_folder, filename)
+
+    if not os.path.exists(data_folder):
+        return 'dir_not_found'
+
+    # add extension if provided without
+    if not filename.split('.')[-1] == 'csv':
+        filename += '.csv'
+
+    # check if file exists, create if not
+    if not os.path.exists(file_path):
+        columns = ['first_name', 'last_name', 'surname',
+                   'company', 'work_number', 'personal_number']
+        
+        with open(file_path, 'w') as f:
+            f.write(';'.join(columns))
+        
+    return filename
+
+
 def main():
+    """
+    This method stands for basic config, work with CLI arguments
+    and execute Phonebook class
+    """
+    # variables declaration
     args = sys.argv[1:]
     text = []
-    filename = 'phonebook.csv'
+    filename = process_file()
     
-    # create list of commands for future use
+    
+    # list of commands for future use
     commands = [
-        '--help', '-h', '--filename', '-f', '--clear', '-c', '--run', '-r'
+        '--help', '-h', '--file', '-f'
     ]
 
+    # it only gets here if command is unknown
+    if args and not any(arg in commands for arg in args):
+        print('Неизвестная команда')
+        return
+    
+    # prints help, text list for better code readability
     if any(arg in ['--help','-h'] for arg in args):
         text.extend([
-            'Справка по коммандам:',
+            'Запуск без аргументов запустит программу со значениями по умолчанию',
             '--help -h\t\tОтобразить эту информацию',
-            '--filename -f [filename]\t\tУказать файл справочника',
-            '--clear -c [filename]\t\tОчистить справочник',
-            '--run -r\t\tЗапустить программу интерактивно'
+            '--file -f [path\\to\\file]\t\tУказать файл справочника',
         ])
         print('\n'.join(text))
         return
 
-    if any(arg in ['--filename', '-f'] for arg in args):
-        index = args.index('--filename') if '--filename' in args else args.index('-f')
-        filename = args[index + 1]
-        
-        
-    if any(arg in ['--clear', '-c'] for arg in args):
-        index = args.index('--clear') if '--clear' in args else args.index('-c')
-        filename = args[index + 1]
-        if not os.path.exists(filename):
-            print(f'Файл {filename} не найден')
-            return 
-        
-        answer = input('Вы уверены, что хотите очистить справочник? (y/n)')
-        if answer.lower() == 'y':
-            Phonebook(filename).clear_data()
+    # check for filename argument, rewrite filename variable if exists
+    if any(arg in ['--file', '-f'] for arg in args):
+        index = args.index('--file') if '--file' in args else args.index('-f')
+
+        try:
+            filepath = os.path.split(args[index + 1])
+        except IndexError:
+            print('Укажите имя файла')
             return
-        
-        print('Действие отменено')
 
-    if not args or any(arg in ['--run', '-r'] for arg in args):
-        phonebook = Phonebook(filename)
-        phonebook.run()
-        return
+        filename = process_file(data_folder=filepath[0], filename=filepath[1])
 
-    if not any(arg in commands for arg in args):
-        print('Неизвестная команда')  
+        if filename == 'dir_not_found':
+            print('Директория не найдена. Возможно целевая папка не создана.')
+            return
 
-                
+    phonebook = Phonebook(filename)
+    phonebook.run()                
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except (KeyboardInterrupt, SystemExit):
+        print('До свидания!')
