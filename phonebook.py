@@ -3,7 +3,6 @@
 import os
 import csv
 import re
-import time
 
 
 class Phonebook:
@@ -21,6 +20,10 @@ class Phonebook:
         self.filename = filename
         self.record_check = False
 
+        self.page = 1
+        self.pages = 1
+        self.items_on_page = 9
+
         self.columns = columns
         
         # made  to simplify main cycle in run method
@@ -29,7 +32,8 @@ class Phonebook:
             '2': self.delete_record,
             '3': self.change_record,
             '4': self.show_all_records,
-            '5': self.search_records
+            '5': self.search_records,
+            '6': self.generate_data
         }
         
 
@@ -38,6 +42,17 @@ class Phonebook:
         Clears console
         """
         os.system('clear' if os.name == 'posix' else 'cls')
+
+
+    def pagination(self, data: list) -> list:
+        
+        if len(data) > self.items_on_page:
+            self.pages = (len(data) - 1) // self.items_on_page + 1
+
+        start_index = (self.page - 1) * self.items_on_page
+        end_index = start_index + self.items_on_page
+
+        return data[start_index:end_index]
 
 
     def add_record(self):
@@ -109,7 +124,6 @@ class Phonebook:
             writer = csv.DictWriter(f, fieldnames=self.columns, delimiter=';')
             writer.writerow(data)
 
-
     
     def _check_name(self, name: str) -> bool:
         """
@@ -141,12 +155,20 @@ class Phonebook:
             digits = re.sub(r'\D', '', number)
             return digits
         return False
-        
 
 
     def delete_record(self):
         self._clear()
-        chosen = input('Удаление записи')
+
+        with open(self.filename, 'r', encoding='utf-8') as f:
+            data = csv.DictReader(f, delimiter=';')
+            
+        # with open(self.filename, 'w', encoding='utf-8') as f:
+        #     while True:
+
+
+                
+        # input()
 
 
     def change_record(self):
@@ -156,13 +178,83 @@ class Phonebook:
 
     def show_all_records(self):
         self._clear()
-        chosen = input('Показать все записи')
+        
+
+        with open(self.filename, 'r', encoding='utf-8') as f:
+            data = csv.DictReader(f, delimiter=';')
+            all_records = list(data)
+
+        while True:
+            self._clear()
+            text = [
+                '-- Список записей --',
+                'Для выхода в главное меню введите "q"',
+                'Для перехода на другую страницу введите "<"\\"p" или ">"\\"n"',
+                'Отправьте номер записи для изменения или удаления\n'
+            ]
+            # print('\n'.join(text))
+
+            page_records = self.pagination(list(all_records))
+            for i, row in enumerate(page_records, 1):
+                text.extend([
+                    f"-- {i} -- ",
+                    f"ФИО: {row['Имя']} {row['Фамилия']} {row['Отчество']}",
+                    f"Компания: {row['Компания']}",
+                    f"Рабочий номер: {row['Рабочий номер']}, "
+                    f"Личный номер: {row['Личный номер']}",
+                ])
+            
+            text.append(f'\nСтраница: {self.page}/{self.pages}')
+            print('\n'.join(text))
+
+            user_input = input('>>> ')
+
+            if user_input == 'q':
+                break
+
+            if user_input in ['<', 'p']:
+                if self.page > 1:
+                    self.page -= 1
+                    continue
+
+            if user_input in ['>', 'n']:
+                if self.page < self.pages:
+                    self.page += 1
+                    continue
+
+            if user_input.isdigit():
+                self.chosen_record = int(user_input)
+                break
+            
 
 
     def search_records(self):
         self._clear()
         chosen = input('Поиск по записям')
 
+
+    def generate_data(self):
+        while True:
+            self._clear()
+
+            user_input = input('Количество записей: ')
+
+            if user_input == 'q':
+                break
+
+            if user_input.isdigit():
+                with open(self.filename, 'a', encoding='utf-8') as f:
+                    writer = csv.writer(f, delimiter=';', lineterminator='\n')
+                    for i in range(int(user_input)):
+                        writer.writerow([
+                            f'Имя{i}', f'Фамилия{i}', f'Отчество{i}',
+                            f'Компания{i}', f'Рабочий номер{i}', f'Личный номер{i}'
+                        ])
+                break
+            else:
+                print('Неккоректный ввод, введите целое число')
+                continue
+        
 
     def run(self):
 
@@ -172,14 +264,16 @@ class Phonebook:
             '3. Изменить запись',
             '4. Показать все записи',
             '5. Поиск по записям',
+            '6. Сгенерировать данные',
             'q. Выход'
         ]
 
         chosen = None
         while True:
             self._clear()
+
             if self.record_check:
-                print('Запись добавлена')
+                print('Записано!')
 
             print('\n'.join(main_menu))
 
