@@ -1,30 +1,29 @@
-﻿import os
+﻿from typing import Union
+
+import os
 import csv
-
-from enum import Enum
-
-
-
-class States(Enum):
-    MAIN_MENU = 'main_menu'
-    ADD_RECORD = 'add_record'
-    DELETE_RECORD = 'delete_record'
-    CHANGE_RECORD = 'change_record'
-    SEARCH_RECORD = 'search_records'
+import re
+import time
 
 
 class Phonebook:
-    def __init__(self, filename: str):
+    def __init__(self, filename: str, columns: list):
+        """
+        Main logic class, allows to work with phonebook
+
+        :param filename: path to phonebook file
+        :param columns: list of columns in file
+        """
 
         # clears console for better visuals
         self._clear()
 
-        self.current_state = States.MAIN_MENU
+        self.filename = filename
+        self.record_check = False
 
-        self.columns = ['first_name', 'last_name', 'surname',
-                       'company', 'work_number', 'personal_number']
+        self.columns = columns
         
-        # made to simplify main cycle in run method
+        # made  to simplify main cycle in run method
         self.main_menu = {
             '1': self.add_record,
             '2': self.delete_record,
@@ -41,17 +40,107 @@ class Phonebook:
         os.system('clear' if os.name == 'posix' else 'cls')
 
 
-    def clear_data(self):
-        """
-        Clears phonebook data by recreating file
-        """
-        os.remove(self.filename)
-        self._check_file()
-
-
     def add_record(self):
+        """
+        Record adding logic, preforms simple input validation and writes to file
+        """
         self._clear()
-        chosen = input('Добавление записи')
+
+        text = ['- Добавление записи -', 
+                'Для выхода в главное меню введите "q"',
+                'Имя может содержать только буквы, тире и двойные скобки',
+                'Номер должен начинаться с +7 или 8\n'
+        ]
+        
+        print('\n'.join(text))
+
+        data = {}
+        user_input = None
+        
+        # columns stands for steps when adding new records
+        for step in self.columns:
+            text.append(f"{step}: ")
+
+            # check for valid input
+            check = True
+
+            # break from this for cycle into main menu
+            if user_input == 'q':
+                break
+
+            while True:
+
+                # print out incorrect input message after clear
+                if not check:
+                    print('Некорректный ввод, попробуйте еще раз')
+                    
+                user_input = input(f'{step} > ')
+            
+                # break from this cycle and prevent executing unnecessary code
+                if user_input == 'q':
+                    break
+                
+                # for numbers input
+                if 'номер' in step:
+                    user_input = self._check_number(user_input)
+                    if not user_input:
+                        check = False
+                        continue
+
+                # for strings input
+                else:
+                    user_input = self._check_name(user_input)
+                    if not user_input:
+                        check = False
+                        continue
+
+                # all checks passed, data is valid
+                check = True
+                text[-1] += user_input
+                data[step] = user_input
+
+                # clear console and reprint text for better visuals
+                self._clear()
+                print('\n'.join(text))
+                break
+        
+        # when data collection done, write it to file
+        with open(self.filename, 'a', encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=self.columns, delimiter=';')
+            writer.writerow(data)
+
+
+    
+    def _check_name(self, name: str) -> bool:
+        """
+        helper function, preforms simple string input validation
+        string can contain only RU\EN letters, hypens and double quotes
+
+        Returns:
+         - passed string if string is valid
+         - False if string is not valid 
+        """
+        pattern = r'^[a-zA-Zа-яА-Я"\s-]*$'
+        if re.search(pattern, name):
+            return name
+        return False
+        
+    
+    def _check_number(self, number: str) -> Union[str, bool]:
+        """
+        helper function, preforms simple number input validation
+        number must start with +7 or 8 and can contain other symbols,
+        e.g. +7(123)456-78-90
+
+        Returns:
+         - digits from number if number is valid
+         - False if number is not valid
+        """
+        allowed = ['+7', '8']
+        if any(number.startswith(symb) for symb in allowed):
+            digits = re.sub(r'\D', '', number)
+            return digits
+        return False
         
 
 
@@ -88,6 +177,10 @@ class Phonebook:
 
         chosen = None
         while True:
+            self._clear()
+            if self.record_check:
+                print('Запись добавлена')
+
             print('\n'.join(main_menu))
 
             chosen = input('>>> ')
