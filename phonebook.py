@@ -53,7 +53,33 @@ class Phonebook:
         end_index = start_index + self.items_on_page
 
         return data[start_index:end_index]
+    
+    
+    def read_last_line(self):
+        with open(self.filename, 'r', encoding='utf-8') as f:
+            # move to EoF
+            f.seek(0, 2)
+            
+            # get end position of last line
+            pos = f.tell()
+            while pos > 0:
+                # move one symbol towards start of file
+                pos -= 1
+                f.seek(pos, 0)
 
+                # read this symbol
+                char = f.read(1)
+
+                # stop iterating when new line symbol found
+                if char == '\n':
+                    last_line = f.readline().strip()
+                    if not last_line:
+                        continue
+                    else:
+                        return last_line
+
+            # last_line = f.readline()
+            # return last_line.strip()
 
     def add_record(self):
         """
@@ -173,7 +199,8 @@ class Phonebook:
 
     def change_record(self):
         self._clear()
-        chosen = input('Изменение записи')
+        print(self.read_last_line())
+        input()
 
 
     def show_all_records(self):
