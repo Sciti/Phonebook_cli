@@ -26,16 +26,6 @@ class Phonebook:
 
         self.columns = columns
         
-        # made  to simplify main cycle in run method
-        self.main_menu = {
-            '1': self.add_record,
-            '2': self.delete_record,
-            '3': self.change_record,
-            '4': self.show_all_records,
-            '5': self.search_records,
-            '6': self.generate_data
-        }
-        
 
     def _clear(self):
         """
@@ -55,31 +45,40 @@ class Phonebook:
         return data[start_index:end_index]
     
     
-    def read_last_line(self):
-        with open(self.filename, 'r', encoding='utf-8') as f:
-            # move to EoF
-            f.seek(0, 2)
-            
-            # get end position of last line
-            pos = f.tell()
-            while pos > 0:
-                # move one symbol towards start of file
-                pos -= 1
-                f.seek(pos, 0)
-
-                # read this symbol
-                char = f.read(1)
-
-                # stop iterating when new line symbol found
-                if char == '\n':
-                    last_line = f.readline().strip()
-                    if not last_line:
-                        continue
+    def reverse_readline(self, buf_size=8192):
+        """
+        A generator that returns the lines of a file in reverse order
+        source: https://stackoverflow.com/questions/2301789/how-to-read-a-file-in-reverse-order
+        """
+        with open(self.filename, 'rb') as fh:
+            segment = None
+            offset = 0
+            fh.seek(0, os.SEEK_END)
+            file_size = remaining_size = fh.tell()
+            while remaining_size > 0:
+                offset = min(file_size, offset + buf_size)
+                fh.seek(file_size - offset)
+                buffer = fh.read(min(remaining_size, buf_size)).decode(encoding='utf-8')
+                remaining_size -= buf_size
+                lines = buffer.split('\n')
+                # The first line of the buffer is probably not a complete line so
+                # we'll save it and append it to the last line of the next buffer
+                # we read
+                if segment is not None:
+                    # If the previous chunk starts right from the beginning of line
+                    # do not concat the segment to the last line of new chunk.
+                    # Instead, yield the segment first 
+                    if buffer[-1] != '\n':
+                        lines[-1] += segment
                     else:
-                        return last_line
-
-            # last_line = f.readline()
-            # return last_line.strip()
+                        yield segment
+                segment = lines[0]
+                for index in range(len(lines) - 1, 0, -1):
+                    if lines[index]:
+                        yield lines[index]
+            # Don't yield None if the file was empty
+            if segment is not None:
+                yield segment
 
     def add_record(self):
         """
@@ -90,20 +89,34 @@ class Phonebook:
         text = ['- Добавление записи -', 
                 'Для выхода в главное меню введите "q"',
                 'Имя может содержать только буквы, тире и двойные скобки',
-                'Номер должен начинаться с +7 или 8\n'
+                'Номер должен начинаться с +, 7 или 8\n'
         ]
         
         print('\n'.join(text))
 
         data = {}
         user_input = None
+        last_id = None
+
+        # get last line for id
+        for line in self.reverse_readline():
+            # in case file has empty lines
+            try:
+                last_id = int(line.split(';')[0])
+            except ValueError:
+                continue
+            
+            break
         
         # columns stands for steps when adding new records
         for step in self.columns:
             text.append(f"{step}: ")
-
-            # check for valid input
-            check = True
+            last_id += 1
+            # automatically assign ID
+            if step == 'ИД':
+                text[-1] += str(last_id)
+                data[step] = last_id
+                continue
 
             # break from this for cycle into main menu
             if user_input == 'q':
@@ -111,6 +124,8 @@ class Phonebook:
 
             while True:
 
+                # check variable for input validation
+                check = True
                 # print out incorrect input message after clear
                 if not check:
                     print('Некорректный ввод, попробуйте еще раз')
@@ -146,8 +161,8 @@ class Phonebook:
                 break
         
         # when data collection done, write it to file
-        with open(self.filename, 'a', encoding='utf-8') as f:
-            writer = csv.DictWriter(f, fieldnames=self.columns, delimiter=';')
+        with open(self.filename, 'a', encoding='utf-8', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=self.columns, delimiter=';', lineterminator='\n')
             writer.writerow(data)
 
     
@@ -169,14 +184,14 @@ class Phonebook:
     def _check_number(self, number: str) -> Union[str, bool]:
         """
         helper function, preforms simple number input validation
-        number must start with +7 or 8 and can contain other symbols,
+        number must start with +, 7 or 8 and can contain other symbols,
         e.g. +7(123)456-78-90
 
         Returns:
          - digits from number if number is valid
          - False if number is not valid
         """
-        allowed = ['+7', '8']
+        allowed = ['+', '7', '8']
         if any(number.startswith(symb) for symb in allowed):
             digits = re.sub(r'\D', '', number)
             return digits
@@ -206,7 +221,6 @@ class Phonebook:
     def show_all_records(self):
         self._clear()
         
-
         with open(self.filename, 'r', encoding='utf-8') as f:
             data = csv.DictReader(f, delimiter=';')
             all_records = list(data)
@@ -222,9 +236,9 @@ class Phonebook:
             # print('\n'.join(text))
 
             page_records = self.pagination(list(all_records))
-            for i, row in enumerate(page_records, 1):
+            for row in page_records:
                 text.extend([
-                    f"-- {i} -- ",
+                    f"-- {row['ИД']} -- ",
                     f"ФИО: {row['Имя']} {row['Фамилия']} {row['Отчество']}",
                     f"Компания: {row['Компания']}",
                     f"Рабочий номер: {row['Рабочий номер']}, "
@@ -250,9 +264,54 @@ class Phonebook:
                     continue
 
             if user_input.isdigit():
-                self.chosen_record = int(user_input)
-                break
+                self.edit_menu = int(user_input)
+                continue
             
+    
+    def edit_menu(self, record_number: int):
+        """
+        Entrypoint to record editing menu
+        """
+        self._clear()
+
+        edit_menu = {
+            '1': self.edit_name,
+            '2': self.edit_company,
+            '3': self.edit_phone
+        }
+
+        while True:
+            self._clear()
+
+            print('\n'.join(
+                [
+                    f'-- Редактирование записи {record_number} --',
+                    '1. Изменить ФИО',
+                    '2. Изменить компанию',
+                    '3. Изменить номер телефона',
+                    'Для возврата назад введите "q"',
+                ]
+            ))
+
+            user_input = input('>>> ')
+
+            if user_input == 'q':
+                break
+
+            if user_input in ['1', '2', '3']:
+                edit_menu[user_input](record_number)
+                break
+
+    def edit_name(self, record_number: int):
+        pass
+
+
+    def edit_company(self, record_number: int):
+        pass
+
+
+    def edit_phone(self, record_number: int):
+        pass
 
 
     def search_records(self):
@@ -261,6 +320,9 @@ class Phonebook:
 
 
     def generate_data(self):
+        """
+        simple generator for other methods test
+        """
         while True:
             self._clear()
 
@@ -273,10 +335,11 @@ class Phonebook:
                 with open(self.filename, 'a', encoding='utf-8') as f:
                     writer = csv.writer(f, delimiter=';', lineterminator='\n')
                     for i in range(int(user_input)):
-                        writer.writerow([
-                            f'Имя{i}', f'Фамилия{i}', f'Отчество{i}',
-                            f'Компания{i}', f'Рабочий номер{i}', f'Личный номер{i}'
-                        ])
+                        i += 1
+                        row = [i, ]
+                        for column in self.columns[1:]:
+                            row.append(f'{column}{i}')
+                        writer.writerow(row)
                 break
             else:
                 print('Неккоректный ввод, введите целое число')
@@ -285,15 +348,15 @@ class Phonebook:
 
     def run(self):
 
-        main_menu = [
-            '1. Добавить запись',
-            '2. Удалить запись',
-            '3. Изменить запись',
-            '4. Показать все записи',
-            '5. Поиск по записям',
-            '6. Сгенерировать данные',
-            'q. Выход'
-        ]
+        # made to simplify selection
+        main_menu_func = {
+            '1': self.add_record,
+            '2': self.delete_record,
+            '3': self.change_record,
+            '4': self.show_all_records,
+            '5': self.search_records,
+            '6': self.generate_data
+        }
 
         chosen = None
         while True:
@@ -302,7 +365,17 @@ class Phonebook:
             if self.record_check:
                 print('Записано!')
 
-            print('\n'.join(main_menu))
+            print('\n'.join(
+                [
+                    '1. Добавить запись',
+                    '2. Удалить запись',
+                    '3. Изменить запись',
+                    '4. Показать все записи',
+                    '5. Поиск по записям',
+                    '6. Сгенерировать данные',
+                    'q. Выход'
+                ]
+            ))
 
             chosen = input('>>> ')
             
