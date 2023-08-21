@@ -19,6 +19,7 @@ class Phonebook:
 
         self.filename = filename
         self.record_check = False
+        self.chosen_record = None
 
         self.page = 1
         self.pages = 1
@@ -28,9 +29,7 @@ class Phonebook:
         
 
     def _clear(self):
-        """
-        Clears console
-        """
+        """Clears console"""
         os.system('clear' if os.name == 'posix' else 'cls')
 
 
@@ -80,6 +79,7 @@ class Phonebook:
             if segment is not None:
                 yield segment
 
+
     def add_record(self):
         """
         Record adding logic, preforms simple input validation and writes to file
@@ -112,6 +112,7 @@ class Phonebook:
         for step in self.columns:
             text.append(f"{step}: ")
             last_id += 1
+
             # automatically assign ID
             if step == 'ИД':
                 text[-1] += str(last_id)
@@ -122,10 +123,11 @@ class Phonebook:
             if user_input == 'q':
                 break
 
+            # check variable for input validation
+            check = True
+
             while True:
 
-                # check variable for input validation
-                check = True
                 # print out incorrect input message after clear
                 if not check:
                     print('Некорректный ввод, попробуйте еще раз')
@@ -162,7 +164,12 @@ class Phonebook:
         
         # when data collection done, write it to file
         with open(self.filename, 'a', encoding='utf-8', newline='') as f:
-            writer = csv.DictWriter(f, fieldnames=self.columns, delimiter=';', lineterminator='\n')
+            writer = csv.DictWriter(
+                f=f,
+                fieldnames=self.columns,
+                delimiter=';',
+                lineterminator='\n'
+            )
             writer.writerow(data)
 
     
@@ -199,31 +206,64 @@ class Phonebook:
 
 
     def delete_record(self):
-        self._clear()
+        
+        success_indicator = False
+        while True:
+            self._clear()
 
-        with open(self.filename, 'r', encoding='utf-8') as f:
-            data = csv.DictReader(f, delimiter=';')
-            
-        # with open(self.filename, 'w', encoding='utf-8') as f:
-        #     while True:
+            print('\n'.join(
+                [
+                    '-- Удаление записи --',
+                    'Для удаления записи отправьте её ИД или условие поиска',
+                    'Для выхода в главное меню введите "q"'
+                ]
+            ))
 
+            user_input = input('>>> ')
 
+            if user_input == 'q':
+                break
+
+            if success_indicator:
+                print('Запись удалена!')
+                success_indicator = False
+
+            # in case where phonebook contains more than 1000 records
+            # it's better to use database
+            if user_input.isdigit() and len(user_input) < 3:
+                with open(self.filename, 'r', encoding='utf-8') as f:
+                    data = csv.DictReader(f, delimiter=';')
+                    records = list(data)
                 
-        # input()
+                for record in records.copy():
+                    if record['ИД'] == user_input:
+                        records.remove(record)
+
+                with open(self.filename, 'w', encoding='utf-8', newline='') as f:
+                    writer = csv.DictWriter(
+                        f=f,
+                        fieldnames=self.columns,
+                        delimiter=';',
+                        lineterminator='\n'
+                    )
+                    writer.writeheader()
+                    writer.writerows(records)
 
 
     def change_record(self):
-        self._clear()
-        print(self.read_last_line())
-        input()
-
-
-    def show_all_records(self):
-        self._clear()
         
-        with open(self.filename, 'r', encoding='utf-8') as f:
-            data = csv.DictReader(f, delimiter=';')
-            all_records = list(data)
+        
+        while True:
+            self._clear()
+
+
+
+    def show_records(self, records: list = None):
+        
+        if not records:
+            with open(self.filename, 'r', encoding='utf-8') as f:
+                data = csv.DictReader(f, delimiter=';')
+                records = list(data)
 
         while True:
             self._clear()
@@ -235,7 +275,7 @@ class Phonebook:
             ]
             # print('\n'.join(text))
 
-            page_records = self.pagination(list(all_records))
+            page_records = self.pagination(list(records))
             for row in page_records:
                 text.extend([
                     f"-- {row['ИД']} -- ",
@@ -264,7 +304,7 @@ class Phonebook:
                     continue
 
             if user_input.isdigit():
-                self.edit_menu = int(user_input)
+                self.chosen_record = int(user_input)
                 continue
             
     
@@ -272,7 +312,6 @@ class Phonebook:
         """
         Entrypoint to record editing menu
         """
-        self._clear()
 
         edit_menu = {
             '1': self.edit_name,
@@ -315,8 +354,49 @@ class Phonebook:
 
 
     def search_records(self):
-        self._clear()
-        chosen = input('Поиск по записям')
+        
+        # input validation check
+        check = True
+        text = []
+        while True:
+            self._clear()
+
+            print('\n'.join(
+                [
+                    '-- Поиск по записям --',
+                    'Напишите запрос для поиска',
+                    'Для возврата назад введите "q"',
+                ]
+            ))
+
+            if not check:
+                print('Некорректный ввод, попробуйте еще раз')
+                continue
+
+            user_input = input('>>> ')
+
+            if user_input == 'q':
+                break
+
+            if not user_input:
+                check = False
+                continue
+            
+            search_result = []
+            with open(self.filename, 'r', encoding='utf-8') as f:
+                data = csv.DictReader(f, delimiter=';')
+                for record in data:
+                    values = [value.lower() for value in record.values()]
+                    if user_input.lower() in str(values):
+                        search_result.append(record)        
+                
+            if not search_result:
+                print('Ничего не найдено')
+                continue
+            
+            break
+
+        self.show_records(search_result)
 
 
     def generate_data(self):
@@ -349,11 +429,11 @@ class Phonebook:
     def run(self):
 
         # made to simplify selection
-        main_menu_func = {
+        main_menu = {
             '1': self.add_record,
             '2': self.delete_record,
             '3': self.change_record,
-            '4': self.show_all_records,
+            '4': self.show_records,
             '5': self.search_records,
             '6': self.generate_data
         }
@@ -390,7 +470,7 @@ class Phonebook:
                 continue
             
             try:
-                self.main_menu[chosen]()
+                main_menu[chosen]()
             except KeyError:
                 self._clear()
                 print('Неккоректный ввод, выберите пункт меню из предложенных: ')
